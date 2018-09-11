@@ -1,0 +1,283 @@
+---
+title: "Linear Models Tutorial"
+author: "Annamaya Halskov-Jensen"
+date: "11/9/2018"
+output: html_document
+---
+
+```{r}
+getwd()
+library(pacman)
+p_load(tidyverse, stringr)
+
+```
+
+Predicting pitch (dependent variable) from sex (independent variable)
+Epsilon = error, random factors, probablistic
+
+pitch	~	sex +	ε
+
+```{r}
+#Creating the dataset
+pitch = c(233,204,242,130,112,142)
+sex = c(rep("female",3),rep("male",3))
+
+#Combining into a dataframe
+df1 = data.frame(sex,pitch)
+
+#Creation of the linear model
+#ε is omitted when doing lm() - not necessary
+model1 = lm(pitch ~ sex, df1)
+summary(model1)
+
+```
+
+Multiple R-squared = variance explained, ranged 0-1.
+In this case, 92,1% is explained by our model.
+Because we only have one predictor, this is all accounted for by gender differences.
+We generally want this to be a high number.
+
+Adjusted R-squared = not only variance explained, but also how many fixed effects used to do the explaining.
+More effects --> lower.
+
+P-value = conditional probability, i.e. the probability under the condition that the null hypothesis is true.
+Distinguish between the significance of the overall model and the individual coefficients.
+
+```{r}
+
+#Getting the mean of female voice pitch --> intercept
+mean(df1[df1$sex=="female",]$pitch)
+
+#Getting the mean of male voice pitch --> intercept - difference
+mean(df1[df1$sex=="male",]$pitch)
+
+```
+
+lm() always chooses the intercept alphabetically.
+
+```{r}
+#Predicting pitch from age, a continuous factor
+
+#Adding age as a variable
+age = c(14,23,35,48,52,67)
+pitch2 = c(252,244,240,233,212,204)
+df2 = data.frame(age,pitch2)
+model2 = lm(pitch2 ~ age, df2)
+summary(model2)
+```
+
+The way to read the output for age (“-0.9099“) is that for every increase of age by 1 you decrease voice pitch by 0.9099 Hertz.
+
+##Meaningful and meaningless intercepts
+
+```{r}
+
+#Remedying the fact that the intercept is meaningless by subtracting the mean age from each age value (?)
+
+df2$age.c = df2$age - mean(df2$age)
+model3 = lm(pitch ~ age.c, df2)
+summary(model3)
+
+#age.c becomes 'centered' using this method
+```
+
+Estimate changes, slope doesn't change, neither does significance.
+Thus, doesn't change the nature of the model, just changes the intercept to mean voice pitch --> adds meaningfulness.
+
+Multiple regression = models one response variable as a function of multiple predictor variables. Linea model is just another word for multiple regression.
+
+##Assumptions
+
+#Linear models have a series of assumptions:
+1. Linearity (if not, residual plot indicates a curve or pattern)
+
+```{r}
+#Plotting the residuals in rotated, zoomed manner
+plot(fitted(model2),residuals(model2))
+```
+
+  Again, if broken, the residual plot would show a violation of linearity.
+    - Might miss an important fixed effect
+    - Perform a non-linear transformation of response, e.g. log
+    - Perform a non-linear transformation of fixed effects
+    - Different class of models (e.g. logistic if categorical)
+    
+2. Absence of collinearity
+    - Collinear = If two fixed effects (predictors) are correlated 
+    - Hard to tell significance; might in- or decrease, steal eachothers "explanatory power".
+    - Choose the most meaningful and drop the other effects
+    - Consider dimension-reduction techniques, e.g. Principal Component Analysis --> transform correlated variables to smaller set of variables.
+    
+3. Homoskedasticity... or "absence of heteroskedasticity"
+    - Variability of your data should be approcimately equal across the range of your predicted values
+    - If violated, heteroskedasticity, a problem with unequal variances
+    - Residuals of your model need to have a similar deviation from the predicted values
+  
+```{r}
+
+#Generating random data to see how a plot with roughly equal variances looks
+plot(rnorm(100),rnorm(100))
+
+```
+
+  - A good residual plot essentially looks blob-like.
+  - Transforming data helps, consider log-transformation
+
+4. Normality of residuals
+    - Least important
+    - LMs relatively robust against violations of nomality
+    - Can be tested/diagnosed using histograms or Q-Q plots
+
+```{r}
+#checking with histogram
+hist(residuals(model2))
+
+#checking with qq-plot
+qqnorm(residuals(model2))
+```
+
+  - Good if histogram is bell-shapes and qq-plot is a straigh line (i.e. similar to normal distribution)
+  
+5. Absence of influential data points
+   - Perhaps not an assumption per se
+   - Can drastically change interpretation or lead to unstable results    - Can be checked using the function dfbeta()
+    
+```{r}
+dfbeta(model2)
+```
+
+  - Gives DFbeta values for each coefficient = values with which they should be adjusted if a data point is excluded.
+  - Room for interpretation as to what is a large DFvalue, but if it changes the sign of the slope it is definitely influential
+      - Look for DFbetas different by half of the absolute of the slope.
+  - Consider running model with and without these influential data points and reporting both
+
+6. Independence
+    - Most important assumption of all statistical tests
+    - If multiple responses from the same subject, they cannot be regarded as independent
+    - If violated, greatly inflates chance of finding a spurious result and a meaningless p-value
+    - A question of experimental design
+    - More data pr subject --> mixed models
+
+##Part 2: A very basic tutorial for performing linea mixed effects analyses
+
+#Introduction: fixed and random effects
+Unpacking the ε used in part 1.
+In mixed models, everything in the "systematic" part of your model works just like linear models.
+
+  pitch	~	politeness	+	sex	+	ε
+
+Dealing with the issue of breaking the assumption of independence (multiple data pr. subject in this case) by adding a random effect for subject.
+  - Resolves non-independence by assuming a different baseline pitch value for each subject.
+  - We can model individual differences by assuming different random intercepts (the mixed model estimates these).
+
+Mixed model <- the previous linear models have been "fixed-effects-only".
+  - Random effects give structure to the error term ε.
+
+  pitch	~	politeness	+	sex	+	(1|subject)	+	ε
+  
+“(1|subject)”	= “assume	an intercept	that’s different for each	
+subject”... And	“1”	stands for the intercept here.	
+
+Model also needs to account for by-item variation (repetition in experimental design, the variation by task)
+
+  pitch	~	politeness	+	sex	+	(1|subject)	+	(1|item)	+	ε
+  
+Mixed models thus account for both these sources of variation in one.
+
+##Mixed models in R
+
+lmer() = mixed model equivalent of lm()
+
+```{r}
+library(pacman)
+p_load(lme4)
+
+#loading data
+politeness <- read.csv("http://www.bodowinter.com/tutorial/politeness_data.csv")
+
+#checking for missing values
+which(is.na(politeness)==T)
+
+  #Why this output?
+
+#looking at the relationship between politeness and pitch in boxplot
+boxplot(frequency ~ attitude*gender, col=c("white","lightgray"), politeness)
+```
+
+The median line is lower for the polite than for the informal condition, maybe a bit more overlap for males than for females.
+
+```{r}
+#constructing the mixed model; model needs a random effect
+politeness.model <- lmer(frequency ~ attitude +
+(1|subject) + (1|scenario), politeness)
+```
+
+Model uses the fixed effect “attitude” (polite vs. informal) to predict voice pitch, controlling for by-subject and by-item variability.
+
+```{r}
+politeness.model
+```
+
+Standard deviation = measure of the variability for each random effect added to the model.
+  - Much less for scenario than for subject
+  - Again, residual is the leftover variability, "ε"
+
+Fixed effects similar to lm
+  - attitudepol = slope for the categorical effect of politeness
+  - Negative; when going from informal to polite --> go down 19-69 Hz.
+  - Standard error associated with this slope, and a t-value, which is simply the estimate (20 Hz) divided by the standard error (check this by performing the calculation by hand).
+
+Intercept represents average of our data for the informal condition.
+  - The model is not aware that we have gender represented as making an important difference
+
+```{r}
+#adding gender as a fixed effect
+politeness.model <- lmer(frequency ~ attitude + gender + (1|subject) + (1|scenario), politeness)
+```
+
+Gender is a fixed and not a random effect because it's relation to pitch is predictable and systematic.
+
+```{r}
+politeness.model
+```
+
+Text says considerable drop in variation associated with subject, although I think this is shown in the 'variance' column not available when I print the model.
+  - Gender variation confounded with subject variation.
+
+Higher intercept, represents female category for the informal.
+
+##Statistical significance
+P-values for mixed models not as straightforward as for linear models.
+  - Here: focus on Likelihood Ratio Test as a means to attain p-values.
+
+Likelihood = probability of seeing the data you collected given your model.
+  - Compares likelihood of two models, one without the factor you're interested in (null model) and the other with this factor.
+
+```{r}
+#constructing the null model
+politeness.null <- lmer(frequency ~ gender + (1|subject) + (1|scenario), politeness, REML=F)
+```
+
+REML = F <-- changes some internal stuff (in particular, the likelihood estimator), and it is necessary to do this when you compare models using the likelihood ratio test.
+
+```{r}
+#repeating the real model with REML = F as well
+politeness.model = lmer(frequency ~ attitude + gender + (1|subject) + (1|scenario), politeness, REML=F)
+
+#comparing the models using anova()
+anova(politeness.null, politeness.model)
+```
+
+You would report this result the following way: “… politeness affected pitch (χ2(1)=11.62, p=0.00065), lowering it by about 19.7 Hz ± 5.6 (standard errors) …”
+  - Rather than getting a p-value straightforwardly from your model, you get a p-value from a comparison of two models.
+  
+Could also have compared to an intercept only model
+  - Wouldn't tell which factor makes the significant different
+
+
+
+
+
+
+
+
